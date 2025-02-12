@@ -231,10 +231,10 @@ func (c *mockCtx) Sign(sh pkcs11.SessionHandle, message []byte) ([]byte, error) 
 
 func setup(t *testing.T, pubKey crypto.PublicKey) *Key {
 	ps := Key{
-		module:     &mockCtx{},
-		tokenLabel: "token label",
-		pin:        "unused",
-		publicKey:  pubKey,
+		module:    &mockCtx{},
+		slotID:    7,
+		pin:       "unused",
+		publicKey: pubKey,
 	}
 	err := ps.setup()
 	if err != nil {
@@ -280,10 +280,10 @@ func TestInitializeBadModule(t *testing.T) {
 func TestInitializeKeyNotFound(t *testing.T) {
 	pubKey := &rsa.PublicKey{N: big.NewInt(2), E: 2}
 	ps := Key{
-		module:     &mockCtx{},
-		tokenLabel: "token label",
-		pin:        "unused",
-		publicKey:  pubKey,
+		module:    &mockCtx{},
+		slotID:    7,
+		pin:       "unused",
+		publicKey: pubKey,
 	}
 	err := ps.setup()
 	expectedText := "looking up public key: no objects found"
@@ -357,10 +357,10 @@ func (c *mockCtxFailsAlwaysAuthenticate) GetAttributeValue(sh pkcs11.SessionHand
 
 func TestAttributeTypeInvalid(t *testing.T) {
 	ps := &Key{
-		module:     &mockCtxFailsAlwaysAuthenticate{},
-		tokenLabel: "token label",
-		pin:        "unused",
-		publicKey:  rsaKey,
+		module:    &mockCtxFailsAlwaysAuthenticate{},
+		slotID:    7,
+		pin:       "unused",
+		publicKey: rsaKey,
 	}
 	err := ps.setup()
 	if err != nil {

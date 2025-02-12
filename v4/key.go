@@ -102,9 +102,8 @@ type Key struct {
 	// The PKCS#11 library to use
 	module ctx
 
-	// The label of the token to be used (mandatory).
-	// We will automatically search for this in the slot list.
-	tokenLabel string
+	// The ID of the token to be used (mandatory).
+	slotID uint
 
 	// The PIN to be used to log in to the device
 	pin string
@@ -158,7 +157,7 @@ func initialize(modulePath string) (ctx, error) {
 }
 
 // New instantiates a new handle to a PKCS #11-backed key.
-func New(modulePath, tokenLabel, pin string, publicKey crypto.PublicKey) (*Key, error) {
+func New(modulePath string, slotID uint, pin string, publicKey crypto.PublicKey) (*Key, error) {
 	module, err := initialize(modulePath)
 	if err != nil {
 		return nil, fmt.Errorf("pkcs11key: %s", err)
@@ -170,10 +169,10 @@ func New(modulePath, tokenLabel, pin string, publicKey crypto.PublicKey) (*Key, 
 
 	// Initialize a partial key
 	ps := &Key{
-		module:     module,
-		tokenLabel: tokenLabel,
-		pin:        pin,
-		publicKey:  publicKey,
+		module:    module,
+		slotID:    slotID,
+		pin:       pin,
+		publicKey: publicKey,
 	}
 
 	err = ps.setup()
@@ -344,45 +343,27 @@ func (ps *Key) Destroy() error {
 }
 
 func (ps *Key) openSession() (pkcs11.SessionHandle, error) {
-	var noSession pkcs11.SessionHandle
-	slots, err := ps.module.GetSlotList(true)
+	// Open session
+	session, err := ps.module.OpenSession(ps.slotID, pkcs11.CKF_SERIAL_SESSION)
 	if err != nil {
-		return noSession, err
-	}
-
-	for _, slot := range slots {
-		// Check that token label matches.
-		tokenInfo, err := ps.module.GetTokenInfo(slot)
-		if err != nil {
-			return noSession, err
-		}
-		if tokenInfo.Label != ps.tokenLabel {
-			continue
-		}
-
-		// Open session
-		session, err := ps.module.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION)
-		if err != nil {
-			return session, err
-		}
-
-		// Login
-		// Note: Logged-in status is application-wide, not per session. But in
-		// practice it appears to be okay to login to a token multiple times with the same
-		// credentials.
-		if err = ps.module.Login(session, pkcs11.CKU_USER, ps.pin); err != nil {
-			if err == pkcs11.Error(pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
-				// But if the token says we're already logged in, it's ok.
-				err = nil
-			} else {
-				ps.module.CloseSession(session)
-				return session, err
-			}
-		}
-
 		return session, err
 	}
-	return noSession, fmt.Errorf("no slot found matching token label %q", ps.tokenLabel)
+
+	// Login
+	// Note: Logged-in status is application-wide, not per session. But in
+	// practice it appears to be okay to login to a token multiple times with the same
+	// credentials.
+	if err = ps.module.Login(session, pkcs11.CKU_USER, ps.pin); err != nil {
+		if err == pkcs11.Error(pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+			// But if the token says we're already logged in, it's ok.
+			err = nil
+		} else {
+			ps.module.CloseSession(session)
+			return session, err
+		}
+	}
+
+	return session, err
 }
 
 // Public returns the public key for the PKCS #11 key.
