@@ -111,6 +111,9 @@ type Key struct {
 	// The public key corresponding to the private key.
 	publicKey crypto.PublicKey
 
+	// The CKA_ID of the private key
+	privateKeyID []byte
+
 	// The an ObjectHandle pointing to the private key on the HSM.
 	privateKeyHandle pkcs11.ObjectHandle
 
@@ -157,7 +160,7 @@ func initialize(modulePath string) (ctx, error) {
 }
 
 // New instantiates a new handle to a PKCS #11-backed key.
-func New(modulePath string, slotID uint, pin string, publicKey crypto.PublicKey) (*Key, error) {
+func New(modulePath string, slotID uint, pin string, publicKey crypto.PublicKey, privateKeyID []byte) (*Key, error) {
 	module, err := initialize(modulePath)
 	if err != nil {
 		return nil, fmt.Errorf("pkcs11key: %s", err)
@@ -169,10 +172,11 @@ func New(modulePath string, slotID uint, pin string, publicKey crypto.PublicKey)
 
 	// Initialize a partial key
 	ps := &Key{
-		module:    module,
-		slotID:    slotID,
-		pin:       pin,
-		publicKey: publicKey,
+		module:       module,
+		slotID:       slotID,
+		pin:          pin,
+		publicKey:    publicKey,
+		privateKeyID: privateKeyID,
 	}
 
 	err = ps.setup()
@@ -271,14 +275,14 @@ func (ps *Key) setup() error {
 	}
 	ps.session = &session
 
-	publicKeyID, err := ps.getPublicKeyID(ps.publicKey)
-	if err != nil {
-		ps.module.CloseSession(session)
-		return fmt.Errorf("looking up public key: %s", err)
-	}
+	// publicKeyID, err := ps.getPublicKeyID(ps.publicKey)
+	// if err != nil {
+	// 	ps.module.CloseSession(session)
+	// 	return fmt.Errorf("looking up public key: %s", err)
+	// }
 
 	// Fetch the private key by matching its id to the public key handle.
-	privateKeyHandle, err := ps.getPrivateKey(ps.module, session, publicKeyID)
+	privateKeyHandle, err := ps.getPrivateKey(ps.module, session, ps.privateKeyID)
 	if err != nil {
 		ps.module.CloseSession(session)
 		return fmt.Errorf("getting private key: %s", err)
